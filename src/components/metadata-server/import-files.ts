@@ -55,6 +55,14 @@ export async function importFiles(pool: Pool, backendID: number, source: AsyncIt
                     SET mtime = input.mtime, bytes = input.bytes, last_change_at = input.last_change_at
                 WHEN MATCHED THEN DO NOTHING
             `);
+            // Remove old files which are not in the newest import:
+            const removal = await trx.query(`DELETE FROM entries
+                WHERE
+                    entries.backend_id = $1 AND
+                    NOT EXISTS (SELECT FROM ${importTableName} import WHERE import.backend_id = entries.backend_id AND import.path = entries.path)`, [
+                        backendID
+                    ]);
+            const deletedCount = removal.rowCount;
             // Update import stats:
             // TODO: Make this faster - all these COUNT(*)s are probably slow.
             await trx.query(`UPDATE imports
@@ -62,14 +70,16 @@ export async function importFiles(pool: Pool, backendID: number, source: AsyncIt
                     finished_at = $1,
                     entry_count = (SELECT COUNT(*) FROM ${importTableName}),
                     new_count = (SELECT COUNT(*) FROM entries WHERE backend_id = $2 AND first_discovery_at = $3),
-                    changed_count = (SELECT COUNT(*) FROM entries WHERE backend_id = $4 AND first_discovery_at <> $5 AND last_change_at = $6)
-                WHERE import_id = $7`, [
+                    changed_count = (SELECT COUNT(*) FROM entries WHERE backend_id = $4 AND first_discovery_at <> $5 AND last_change_at = $6),
+                    deleted_count = $7
+                WHERE import_id = $8`, [
                         new Date(),
                         backendID,
                         importID,
                         backendID,
                         importID,
                         importID,
+                        deletedCount,
                         importID
                     ]);
         });

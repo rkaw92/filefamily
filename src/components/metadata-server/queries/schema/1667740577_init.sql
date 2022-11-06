@@ -13,7 +13,8 @@ CREATE TABLE imports (
   finished_at TIMESTAMP WITH TIME ZONE,
   entry_count BIGINT,
   new_count BIGINT,
-  changed_count BIGINT
+  changed_count BIGINT,
+  deleted_count BIGINT
 );
 
 CREATE TABLE entries (
