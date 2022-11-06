@@ -1,0 +1,36 @@
+{
+  "name": "@rkaw92/filefamily",
+  "version": "0.1.0",
+  "description": "a file-sharing server for the whole family",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "files",
+    "sharing",
+    "http",
+    "server"
+  ],
+  "author": "Robert Kawecki <robert+public@rkaw.pl>",
+  "license": "MIT",
+  "volta": {
+    "node": "18.12.1"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^8.5.9",
+    "@types/node": "^18.11.9",
+    "@types/pg": "^8.6.5",
+    "@types/pg-copy-streams": "^1.2.1",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.8.4"
+  },
+  "dependencies": {
+    "fastify": "^4.9.2",
+    "jsonwebtoken": "^8.5.1",
+    "pg": "^8.8.0",
+    "pg-copy-streams": "^6.0.4",
+    "slonik": "^32.0.0",
+    "zod": "^3.19.1"
+  }
+}
