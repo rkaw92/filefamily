@@ -3,6 +3,7 @@ import { from as copyFrom } from "pg-copy-streams";
 import { FilesystemEntry } from "../../common/filesystem-entry";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { Logger } from 'pino';
 
 async function transaction<TReturn>(client: PoolClient, transactionFunction: (client: PoolClient) => Promise<TReturn>) {
     await client.query('BEGIN');
@@ -27,15 +28,23 @@ async function borrow<TReturn>(pool: Pool, clientFunction: (client: PoolClient) 
     }
 }
 
-export async function importFiles(pool: Pool, backendID: number, source: AsyncIterable<FilesystemEntry>) {
+export async function importFiles(
+    pool: Pool,
+    backendID: number,
+    source: AsyncIterable<FilesystemEntry>,
+    parentLogger: Logger
+) {
     await borrow(pool, async (client) => {
         // Before the transaction, mark our import as started.
         const importStart = await client.query('INSERT INTO imports (backend_id) VALUES ($1) RETURNING import_id', [ backendID ]);
         const importID: string = importStart.rows[0].import_id;
+        const logger = parentLogger.child({ importID, backendID });
+        logger.info('Import process started');
         await transaction(client, async (trx) => {
             // Copy all received files into a temporary table:
             const importTableName = `import_${importID}`;
             await trx.query(`CREATE TEMPORARY TABLE ${importTableName} (LIKE entries INCLUDING ALL) ON COMMIT DROP`);
+            logger.debug({ importTableName }, 'Created transaction-local temp table');
             const writable = trx.query(copyFrom(`COPY ${importTableName} (backend_id, path, type, bytes, mtime, first_discovery_at, last_change_at) FROM STDIN`));
             const toTSV = new Transform({
                 writableObjectMode: true,
@@ -43,8 +52,9 @@ export async function importFiles(pool: Pool, backendID: number, source: AsyncIt
                 transform(entry: FilesystemEntry, _encoding, callback) {
                     callback(null, `${backendID}\t${entry.path}\t${entry.type}\t${entry.bytes}\t${new Date(entry.mtime).toISOString()}\t${importID}\t${importID}\n`);
                 }
-            })
+            });
             await pipeline(source, toTSV, writable);
+            logger.debug('Finished COPY FROM STDIN');
             // Run change detection based on last-modified time (mtime):
             await trx.query(`MERGE INTO entries AS target
                 USING ${importTableName} AS input
@@ -55,6 +65,7 @@ export async function importFiles(pool: Pool, backendID: number, source: AsyncIt
                     SET mtime = input.mtime, bytes = input.bytes, last_change_at = input.last_change_at
                 WHEN MATCHED THEN DO NOTHING
             `);
+            logger.debug('Finished MERGE');
             // Remove old files which are not in the newest import:
             const removal = await trx.query(`DELETE FROM entries
                 WHERE
@@ -62,6 +73,7 @@ export async function importFiles(pool: Pool, backendID: number, source: AsyncIt
                     NOT EXISTS (SELECT FROM ${importTableName} import WHERE import.backend_id = entries.backend_id AND import.path = entries.path)`, [
                         backendID
                     ]);
+            logger.debug('Finished DELETE');
             const deletedCount = removal.rowCount;
             // Update import stats:
             // TODO: Make this faster - all these COUNT(*)s are probably slow.
@@ -83,5 +95,6 @@ export async function importFiles(pool: Pool, backendID: number, source: AsyncIt
                         importID
                     ]);
         });
-    })
+        logger.info('Import finished');
+    });
 }
