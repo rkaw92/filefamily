@@ -56,6 +56,8 @@ export async function importFiles(pool: Pool, tableName: string, backendID: numb
                     SET mtime = input.mtime, bytes = input.bytes, last_change_at = input.last_change_at
                 WHEN MATCHED THEN DO NOTHING
             `);
+            // Update import stats:
+            // TODO: Make this faster - all these COUNT(*)s are probably slow.
             await trx.query(`UPDATE imports
                 SET
                     finished_at = $1,
