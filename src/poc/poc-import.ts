@@ -8,6 +8,6 @@ const pool = new Pool({
 });
 (async function() {
     const sourceDirectory = env('IMPORT_PATH');
-    await importFiles(pool, 'UNUSED', 1, traverse(sourceDirectory));
+    await importFiles(pool, 1, traverse(sourceDirectory));
     pool.end();
 })();

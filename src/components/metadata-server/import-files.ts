@@ -27,12 +27,11 @@ async function borrow<TReturn>(pool: Pool, clientFunction: (client: PoolClient) 
     }
 }
 
-export async function importFiles(pool: Pool, tableName: string, backendID: number, source: AsyncIterable<FilesystemEntry>) {
+export async function importFiles(pool: Pool, backendID: number, source: AsyncIterable<FilesystemEntry>) {
     await borrow(pool, async (client) => {
         // Before the transaction, mark our import as started.
         const importStart = await client.query('INSERT INTO imports (backend_id) VALUES ($1) RETURNING import_id', [ backendID ]);
         const importID: string = importStart.rows[0].import_id;
-        console.log('Import: %d', importID);
         await transaction(client, async (trx) => {
             // Copy all received files into a temporary table:
             const importTableName = `import_${importID}`;
